@@ -1,10 +1,58 @@
-# Ignore datasets
-datasets/
-
-# Python cache
+# =========================
+# Python
+# =========================
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyo
+*.pyd
+*.so
 
 # Virtual environments
+env/
 venv/
 .venv/
+
+# VS Code
+.vscode/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log
+logs/
+
+# =========================
+# Machine Learning
+# =========================
+
+# Datasets
+datasets/
+data/
+
+# Trained models
+
+models/
+*.pth
+checkpoints/
+weights/
+
+*.pth
+*.pt
+*.ckpt
+*.h5
+*.keras
+*.onnx
+*.tflite
+*.joblib
+*.pkl
+
+# TensorBoard
+runs/
+
+# Cached files
+.cache/
+
+# System files
+.DS_Store
+Thumbs.db
