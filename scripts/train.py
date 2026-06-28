@@ -220,4 +220,3 @@ print("Best Model Saved Inside:")
 
 print(MODEL_DIR)
 
-#12 hrs training 30 epoches!!
