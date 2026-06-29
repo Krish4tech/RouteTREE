@@ -1,153 +1,136 @@
-import os
+import time
 import cv2
-import torch
 import numpy as np
+import torch
 
 from model import RouteTREEModel
 
 
-# ============================================================
-# CONFIGURATION
-# ============================================================
+class RouteTREEPredictor:
 
-MODEL_PATH = r"D:\Projects\RouteTREE\models\deeplabv3\best_model.pth"
+    def __init__(self, model_path):
 
-INPUT_IMAGE = r"D:\Projects\RouteTREE\968674_sat.jpg"
+        self.device = torch.device(
+            "cuda" if torch.cuda.is_available() else "cpu"
+        )
 
-OUTPUT_DIR = r"D:\Projects\RouteTREE\outputs\predictions"
+        self.model = RouteTREEModel()
 
-IMAGE_SIZE = 512
+        checkpoint = torch.load(
+            model_path,
+            map_location=self.device
+        )
 
-THRESHOLD = 0.5
+        self.model.load_state_dict(checkpoint)
 
+        self.model.to(self.device)
 
-# ============================================================
-# DEVICE
-# ============================================================
+        self.model.eval()
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print("Model Loaded Successfully")
+        print("Device :", self.device)
 
-print("=" * 60)
-print("RouteTREE Prediction")
-print("=" * 60)
-print(f"Device : {device}")
+        if torch.cuda.is_available():
+            print("GPU :", torch.cuda.get_device_name(0))
 
-if torch.cuda.is_available():
-    print(f"GPU : {torch.cuda.get_device_name(0)}")
+    ####################################################################
 
-print("=" * 60)
+    def preprocess(self, image):
 
+        original_h, original_w = image.shape[:2]
 
-# ============================================================
-# CREATE OUTPUT DIRECTORY
-# ============================================================
+        rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+        rgb = cv2.resize(rgb, (512, 512))
 
+        rgb = rgb.astype(np.float32) / 255.0
 
-# ============================================================
-# LOAD MODEL
-# ============================================================
+        mean = np.array(
+            [0.485, 0.456, 0.406],
+            dtype=np.float32
+        )
 
-model = RouteTREEModel()
+        std = np.array(
+            [0.229, 0.224, 0.225],
+            dtype=np.float32
+        )
 
-checkpoint = torch.load(
-    MODEL_PATH,
-    map_location=device
-)
+        rgb = (rgb - mean) / std
 
-model.load_state_dict(checkpoint)
+        tensor = torch.from_numpy(rgb)
 
-model.to(device)
+        tensor = tensor.permute(2, 0, 1)
 
-model.eval()
+        tensor = tensor.unsqueeze(0)
 
-print("Model Loaded Successfully.")
+        tensor = tensor.float()
 
+        tensor = tensor.to(self.device)
 
-# ============================================================
-# LOAD IMAGE
-# ============================================================
+        return tensor, original_h, original_w
 
-image = cv2.imread(INPUT_IMAGE)
+    ####################################################################
 
-if image is None:
-    raise FileNotFoundError(INPUT_IMAGE)
+    def predict(self, image):
 
-original_height, original_width = image.shape[:2]
+        tensor, h, w = self.preprocess(image)
 
-image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        start = time.time()
 
-image_rgb = cv2.resize(
-    image_rgb,
-    (IMAGE_SIZE, IMAGE_SIZE)
-)
+        with torch.no_grad():
 
-image_rgb = image_rgb.astype(np.float32) / 255.0
+            output = self.model(tensor)
 
-mean = np.array([0.485, 0.456, 0.406])
-std = np.array([0.229, 0.224, 0.225])
+            output = torch.sigmoid(output)
 
-image_rgb = (image_rgb - mean) / std
+            output = (output > 0.5).float()
 
-image_tensor = torch.from_numpy(image_rgb)
+        elapsed = time.time() - start
 
-image_tensor = image_tensor.permute(2, 0, 1)
+        mask = output.squeeze().cpu().numpy()
 
-image_tensor = image_tensor.unsqueeze(0)
+        mask = (mask * 255).astype(np.uint8)
 
-image_tensor = image_tensor.float().to(device)
+        mask = cv2.resize(
+            mask,
+            (w, h),
+            interpolation=cv2.INTER_NEAREST
+        )
 
+        road_pixels = np.sum(mask == 255)
 
-# ============================================================
-# PREDICTION
-# ============================================================
+        total_pixels = mask.size
 
-with torch.no_grad():
+        road_percentage = (
+            road_pixels / total_pixels
+        ) * 100
 
-    output = model(image_tensor)
+        return {
 
-    prediction = torch.sigmoid(output)
+            "mask": mask,
 
-    prediction = (prediction > THRESHOLD).float()
+            "time": elapsed,
 
-prediction = prediction.squeeze().cpu().numpy()
+            "road_pixels": int(road_pixels),
 
-prediction = prediction.astype(np.uint8) * 255
+            "road_percentage": float(road_percentage)
 
+        }
 
-# ============================================================
-# RESIZE TO ORIGINAL SIZE
-# ============================================================
+    ####################################################################
 
-prediction = cv2.resize(
-    prediction,
-    (original_width, original_height),
-    interpolation=cv2.INTER_NEAREST
-)
+    def overlay(self, image, mask):
 
+        color_mask = np.zeros_like(image)
 
-# ============================================================
-# SAVE OUTPUT
-# ============================================================
+        color_mask[:, :, 1] = mask
 
-image_name = os.path.basename(INPUT_IMAGE)
+        overlay = cv2.addWeighted(
+            image,
+            0.7,
+            color_mask,
+            0.3,
+            0
+        )
 
-image_name = os.path.splitext(image_name)[0]
-
-output_path = os.path.join(
-    OUTPUT_DIR,
-    image_name + "_mask.png"
-)
-
-cv2.imwrite(output_path, prediction)
-
-print()
-
-print("=" * 60)
-
-print("Prediction Completed Successfully")
-
-print(f"Mask Saved : {output_path}")
-
-print("=" * 60)
+        return overlay
