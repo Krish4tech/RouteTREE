@@ -6,7 +6,7 @@ from node_detector import NodeDetector
 from label_generator import LabelGenerator
 
 MASK = r"C:\Users\shrik\Downloads\archive\train\972254_mask.png"
-
+#achieve
 mask = cv2.imread(
     MASK,
     cv2.IMREAD_GRAYSCALE

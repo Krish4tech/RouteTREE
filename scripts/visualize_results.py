@@ -45,7 +45,7 @@ print(type(augmented_image))
 print(augmented_image.shape)
 print(augmented_image.min())
 print(augmented_image.max())
-
+#withdrawal
 
 # ============================================================
 # Convert Tensors -> NumPy
