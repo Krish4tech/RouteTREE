@@ -21,4 +21,4 @@ loader = DataLoader(
 images, masks = next(iter(loader))
 
 print(images.shape)
-print(masks.
+print(masks.shape)
